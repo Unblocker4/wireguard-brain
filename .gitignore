@@ -1,7 +1,6 @@
 # Dependencies
 node_modules/
 .env
-.github
 .git
 Dockerfile
 docker-compose.yaml
