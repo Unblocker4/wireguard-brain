@@ -1,0 +1,18 @@
+services:
+  brain-api:
+    # Build the image from the Dockerfile in the current directory
+    build: .
+    container_name: vpn-brain-api
+    # Load all variables from the .env file
+    env_file: .env
+    ports:
+      # Map the host's port (from .env) to the container's port
+      - "${PORT}:${PORT}"
+    # This ensures the container restarts if it crashes
+    restart: unless-stopped
+    networks:
+      - vpn-net
+
+networks:
+  vpn-net:
+    driver: bridge

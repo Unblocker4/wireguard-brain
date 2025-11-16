@@ -1,0 +1,8 @@
+# Ignore dependencies (they are installed in the container)
+node_modules/
+
+
+# Ignore Docker files
+Dockerfile
+.dockerignore
+.env
