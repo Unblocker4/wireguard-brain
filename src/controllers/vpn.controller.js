@@ -1,5 +1,4 @@
 import Gateway from '../models/gateway.model.js';
-import { generateWgKeys, assignIp, buildWgConfig } from '../services/vpn.service.js';
 import axios from 'axios';
 
 export const getConfig = async (req, res) => {
@@ -8,13 +7,10 @@ export const getConfig = async (req, res) => {
     const user = req.user;
 
     // --- 1. User ALREADY has a config ---
-    if (user.assignedGateway && user.wgPublicKey) {
+    if (user.wireguardConfig) {
       console.log(`[INFO] Returning existing config for user ${user.email}`);
-      const gateway = await Gateway.findById(user.assignedGateway);
-      
-      const config = buildWgConfig(user, gateway);
       res.set('Content-Type', 'text/plain');
-      return res.status(200).send(config);
+      return res.status(200).send(user.wireguardConfig);
     }
 
     // --- 2. User is NEW (First-time provisioning) ---
@@ -26,28 +22,26 @@ export const getConfig = async (req, res) => {
       return res.status(503).json({ error: 'Service Unavailable: No gateways found' });
     }
 
-    // B. Generate new WireGuard keys for the user
-    const { privateKey, publicKey } = await generateWgKeys();
-
-    // C. Assign a new IP (simple random IP for this example)
-    const vpnIp = assignIp(gateway.subnet); // Remember to improve this logic
-
-    // D. Tell the "Muscle" (Agent) to add this peer
-    await axios.post(
+    // B. Call the gateway API to generate a client config
+    // Gateway only needs authentication, no keys or IPs needed
+    const response = await axios.post(
       `${gateway.apiEndpoint}/add-peer`,
-      { publicKey: publicKey, vpnIp: vpnIp },
+      {peer_name: user.email.split('@')[0]},
       { headers: { 'x-api-key': gateway.apiKey } }
     );
 
-    // E. Save provisioning info to the user's document
+    // C. Extract the config string from the response body
+    const config = response.data.config;
+    if (!config) {
+      throw new Error('Gateway did not return a config in the response');
+    }
+
+    // D. Save the config string and assigned gateway to the user's document
+    user.wireguardConfig = config;
     user.assignedGateway = gateway._id;
-    user.vpnIp = vpnIp;
-    user.wgPublicKey = publicKey;
-    user.wgPrivateKey = privateKey; // !! Remember: Encrypt this!
     await user.save();
     
-    // F. Build and return the new config string
-    const config = buildWgConfig(user, gateway);
+    // E. Return the config string
     res.set('Content-Type', 'text/plain');
     res.status(200).send(config);
 
